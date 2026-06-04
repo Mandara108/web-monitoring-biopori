@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Farming Monitor - Admin</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="authPage" class="page active">
+  <div class="auth-left">
+    <div class="auth-brand">
+      <div class="auth-logo">🌱</div>
+      <h1>Smart Farming<br>Monitor</h1>
+      <p>Pantau kondisi tanah &amp; gas metana biopori kamu secara realtime dari mana saja.</p>
+    </div>
+
+    <div class="auth-divider"></div>
+
+    <div class="auth-features">
+      <div class="auth-feat"><div class="auth-feat-icon">📡</div><span>Monitoring sensor realtime via ESP32</span></div>
+      <div class="auth-feat"><div class="auth-feat-icon">💾</div><span>Simpan snapshot data kapan saja</span></div>
+      <div class="auth-feat"><div class="auth-feat-icon">📊</div><span>History tersimpan per akun pengguna</span></div>
+      <div class="auth-feat"><div class="auth-feat-icon">🔒</div><span>Data privat, hanya bisa diakses akunmu</span></div>
+    </div>
+  </div>
+
+  <div class="auth-right">
+    <div id="loginForm" class="auth-form active">
+      <div style="margin-bottom: 16px;">
+        <div class="form-title">Login Admin 🔐</div>
+        <div class="form-sub">Masuk sebagai administrator untuk akses sistem</div>
+      </div>
+      <div class="fgroup">
+        <label class="flabel">Email Admin</label>
+        <input class="finput" type="email" id="liEmail" placeholder="admin@domain.com">
+      </div>
+      <div class="fgroup">
+        <label class="flabel">Password</label>
+        <input class="finput" type="password" id="liPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div id="liErr" class="auth-err"></div>
+      <button class="btn btn-primary" onclick="doLogin()" style="margin-top: 8px;">🔑 &nbsp;Masuk Admin</button>
+    </div>
+  </div>
+</div>
+
+<div id="dashPage" class="page">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="t-logo">🌱</div>
+      <span class="t-title">Smart Farming Monitor</span>
+    </div>
+    <div class="topbar-right">
+      <div class="live-badge"><div class="pdot"></div>LIVE</div>
+      <div class="user-pill">
+        <div class="uavatar" id="uAvatar">A</div>
+        <span id="uEmail" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Admin</span>
+      </div>
+      <button class="btn btn-out btn-sm" onclick="doLogout()">Keluar</button>
+    </div>
+  </div>
+
+  <div class="dash-main">
+
+    <div class="device-controls">
+      <select class="finput dc-select">
+        <option value="" disabled selected>Pilih Biopori...</option>
+      </select>
+      <input type="text" class="finput dc-input" value="" placeholder="Nama Biopori...">
+      <button class="btn btn-primary">+ Tambah</button>
+      <button class="btn btn-danger-out">🗑 Hapus</button>
+    </div>
+
+    <div class="sh">
+      <div class="sh-title">Sensor Realtime</div>
+      <div class="sh-meta" id="lastUpdate">Menunggu data...</div>
+    </div>
+
+    <div class="cards-row">
+      <div class="mcard c-ph" style="animation-delay:.05s">
+        <div class="c-top">
+          <div class="c-icon">🧪</div>
+          <div class="c-badge">PH SENSOR</div>
+        </div>
+        <div class="c-lbl">PH Tanah</div>
+        <div class="c-val" id="phValue">—</div>
+        <div class="c-unit">Skala 0 – 14</div>
+        <div class="ph-spec"><div class="ph-needle" id="phNeedle" style="left:50%"></div></div>
+        <div class="c-status" id="phStatus">
+          <span style="color:var(--muted)">●</span>
+          <span style="color:var(--muted)">Menunggu data...</span>
+        </div>
+      </div>
+
+      <div class="mcard c-gas" style="animation-delay:.1s">
+        <div class="c-top">
+          <div class="c-icon">💨</div>
+          <div class="c-badge">GAS SENSOR</div>
+        </div>
+        <div class="c-lbl">Gas Metana</div>
+        <div class="c-val" id="gasValue">—</div>
+        <div class="c-unit">Parts per million (ppm)</div>
+        <div class="c-status" id="gasStatus" style="margin-top:34px">
+          <span style="color:var(--muted)">●</span>
+          <span style="color:var(--muted)">Menunggu data...</span>
+        </div>
+      </div>
+
+      <div class="save-card" onclick="saveSnapshot()">
+        <div class="save-icon">💾</div>
+        <div class="save-lbl">Simpan Snapshot</div>
+        <div class="save-sub">Catat nilai PH &amp; Gas saat ini<br>ke riwayat akunmu</div>
+      </div>
+    </div>
+
+    <div class="sh">
+      <div class="sh-title">Grafik Monitoring</div>
+    </div>
+
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-hdr">
+          <div class="chart-leg"><div class="ldot d-blue"></div>PH Tanah</div>
+          <div class="chart-tag">pH 0–14</div>
+        </div>
+        <div class="chart-wrap"><canvas id="phChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-hdr">
+          <div class="chart-leg"><div class="ldot d-amber"></div>Gas Metana</div>
+          <div class="chart-tag">ppm</div>
+        </div>
+        <div class="chart-wrap"><canvas id="gasChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="sh">
+      <div class="sh-title">Riwayat Penyimpanan</div>
+      <div class="sh-meta" id="histCount">0 catatan</div>
+    </div>
+
+    <div class="hist-card">
+      <div class="hist-list" id="histList">
+        <div class="hist-empty">
+          <div class="hist-empty-icon">📋</div>
+          Belum ada data tersimpan.<br>Tekan <strong>Simpan Snapshot</strong> untuk mulai mencatat.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
